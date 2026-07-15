@@ -1,0 +1,202 @@
+// ==UserScript==
+// @name         GeoFS Flight Data Block v4
+// @namespace    GeoFS
+// @version      3.0
+// @match        https://*.geo-fs.com/geofs.php*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    //
+    // DATA BLOCK
+    //
+    const dataBlock =
+        document.createElement("div");
+
+    dataBlock.style.position =
+        "fixed";
+
+    dataBlock.style.left =
+        "1290px";
+
+    dataBlock.style.bottom =
+        "40px";
+
+    dataBlock.style.zIndex =
+        "100000";
+
+    dataBlock.style.color =
+        "lime";
+
+    dataBlock.style.fontFamily =
+        "monospace";
+
+    dataBlock.style.fontSize =
+        "18px";
+
+    dataBlock.style.whiteSpace =
+        "pre";
+
+    dataBlock.style.textShadow =
+        "0 0 5px lime";
+
+    dataBlock.style.pointerEvents =
+        "none";
+
+    document.body.appendChild(
+        dataBlock
+    );
+
+    //
+    // PREVIOUS VELOCITY
+    //
+    let previousVx = null;
+    let previousVy = null;
+    let previousVz = null;
+
+    let previousTime =
+        Date.now();
+
+    let displayedG = 1.0;
+
+    //
+    // UPDATE LOOP
+    //
+    setInterval(function () {
+
+        try {
+
+            const aircraft =
+                geofs.aircraft.instance;
+
+            if (
+                !aircraft ||
+                !aircraft.llaLocation
+            ) {
+                return;
+            }
+
+            const velocity =
+                aircraft.velocity ||
+                [0, 0, 0];
+
+            const vx =
+                velocity[0] || 0;
+
+            const vy =
+                velocity[1] || 0;
+
+            const vz =
+                velocity[2] || 0;
+
+            //
+            // SPEED
+            //
+            const speed =
+                Math.sqrt(
+                    vx * vx +
+                    vy * vy +
+                    vz * vz
+                );
+
+            //
+            // ALTITUDE
+            //
+            const altitude =
+                aircraft.llaLocation[2] || 0;
+
+            //
+            // TERRAIN
+            //
+            const terrain =
+                geofs.groundElevation || 0;
+
+            //
+            // AGL
+            //
+            const agl =
+                Math.max(
+                    altitude - terrain,
+                    0
+                );
+
+            //
+            // VERTICAL SPEED
+            //
+            const vs =
+                Math.round(vz);
+
+            //
+            // MANOEUVRE G ESTIMATE
+            //
+            const now =
+                Date.now();
+
+            const dt =
+                (now - previousTime) / 1000;
+
+            let gForce = 1.0;
+
+            if (
+                previousVx !== null &&
+                previousVy !== null &&
+                previousVz !== null &&
+                dt > 0
+            ) {
+
+                const ax =
+                    (vx - previousVx) / dt;
+
+                const ay =
+                    (vy - previousVy) / dt;
+
+                const az =
+                    (vz - previousVz) / dt;
+
+                const accel =
+                    Math.sqrt(
+                        ax * ax +
+                        ay * ay +
+                        az * az
+                    );
+
+                //
+                // Convert acceleration
+                // to approximate load factor
+                //
+                gForce =
+                    1 +
+                    (accel / 9.81);
+
+                //
+                // Smooth display
+                //
+                displayedG =
+                    displayedG * 0.9 +
+                    gForce * 0.1;
+            }
+
+            previousVx = vx;
+            previousVy = vy;
+            previousVz = vz;
+
+            previousTime = now;
+
+            dataBlock.textContent =
+`SPD ${Math.round(speed)*2}
+ALT ${Math.round(altitude)}
+AGL ${Math.round(agl)}
+V/S ${vs}
+G   ${displayedG.toFixed(1)}`;
+
+        } catch (e) {
+
+            dataBlock.textContent =
+                "DATA ERR";
+        }
+
+    }, 100);
+
+})();
