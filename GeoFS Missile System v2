@@ -1,0 +1,992 @@
+// ==UserScript==
+// @name         GeoFS Missile System v2
+// @namespace    GeoFS
+// @version      2.0
+// @match        https://*.geo-fs.com/geofs.php*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    let activeMissiles = [];
+    const MAX_MISSILES = 18;
+
+let missileCount = MAX_MISSILES;
+
+let periodHeldSince = null;
+
+window.missileRangeNM = 0;
+window.missileTTI = 0;
+window.missileTargetName = "";
+    const missileHud =
+    document.createElement("div");
+
+missileHud.style.position =
+    "fixed";
+
+missileHud.style.left =
+    "20px";
+
+missileHud.style.top =
+    "20px";
+
+missileHud.style.zIndex =
+    "100000";
+
+missileHud.style.color =
+    "lime";
+
+missileHud.style.fontFamily =
+    "monospace";
+
+missileHud.style.fontSize =
+    "18px";
+
+missileHud.style.textShadow =
+    "0 0 5px lime";
+
+missileHud.style.whiteSpace =
+    "pre";
+
+missileHud.style.pointerEvents =
+    "none";
+
+missileHud.textContent =
+    "";
+
+document.body.appendChild(
+    missileHud
+);
+    //--------------------------------------------------
+// MISSILE COUNTER HUD
+//--------------------------------------------------
+
+const missileCounterHud =
+    document.createElement("div");
+
+missileCounterHud.style.position =
+    "fixed";
+
+missileCounterHud.style.left =
+    "1290px";
+
+missileCounterHud.style.top =
+    "49.5%";
+
+missileCounterHud.style.zIndex =
+    "100000";
+
+missileCounterHud.style.color =
+    "lime";
+
+missileCounterHud.style.fontFamily =
+    "monospace";
+
+missileCounterHud.style.fontSize =
+    "18px";
+
+missileCounterHud.style.textShadow =
+    "0 0 5px lime";
+
+missileCounterHud.style.pointerEvents =
+    "none";
+
+document.body.appendChild(
+    missileCounterHud
+);
+    function updateMissileCounter() {
+
+    missileCounterHud.textContent =
+        `MISSILES: ${missileCount}`;
+}
+
+updateMissileCounter();
+const scorchMarks = [];
+const MAX_SCORCH_MARKS = 200;
+    //--------------------------------------------------
+    // LLA TO LOCAL XYZ (METRES)
+    //--------------------------------------------------
+
+    function llaToLocalXYZ(origin, target) {
+
+        const latScale = 111320;
+
+        const lonScale =
+            111320 *
+            Math.cos(
+                origin[0] * Math.PI / 180
+            );
+
+        return [
+
+            (target[1] - origin[1]) *
+            lonScale,
+
+            (target[0] - origin[0]) *
+            latScale,
+
+            target[2] - origin[2]
+
+        ];
+    }
+function createScorchMark(location) {
+
+    const scorch =
+        new geofs.api.billboard(
+            location,
+            "images/lights/yellowflare.png",
+            {
+                scale: 12,
+                opacity: 1
+            }
+        );
+
+    scorch._billboard.color =
+        new Cesium.Color(
+            0.01,
+            0.01,
+            0.01,
+            0.95
+        );
+
+    scorchMarks.push(
+        scorch
+    );
+
+    if (
+        scorchMarks.length >
+        MAX_SCORCH_MARKS
+    ) {
+
+        try {
+
+            scorchMarks[0].destroy();
+
+        } catch(e) {}
+
+        scorchMarks.shift();
+    }
+}
+    //--------------------------------------------------
+    // DISTANCE
+    //--------------------------------------------------
+
+    function distance3D(a, b) {
+
+        const dx =
+            b[0] - a[0];
+
+        const dy =
+            b[1] - a[1];
+
+        const dz =
+            b[2] - a[2];
+
+        return Math.sqrt(
+            dx * dx +
+            dy * dy +
+            dz * dz
+        );
+    }
+
+    //--------------------------------------------------
+    // EXPLOSION
+    //--------------------------------------------------
+
+    function createExplosion(location) {
+let smokeEmitter = null;
+
+try {
+
+    smokeEmitter =
+        new geofs.fx.ParticleEmitter({
+
+            off: 0,
+
+            location: location,
+
+            duration: 5000,
+
+            rate: 0.003,
+
+            life: 12000,
+
+            easing: "easeOutQuart",
+
+            startScale: 0.2,
+
+            endScale: 0.8,
+
+            randomizeStartScale: 0.04,
+
+            randomizeEndScale: 0.1,
+
+            startOpacity: 0.75,
+
+            endOpacity: 0,
+
+            startRotation: "random",
+
+            texture: "darkSmoke"
+
+        });
+
+} catch(e) {}
+        const flash =
+            new geofs.api.billboard(
+                location,
+                "images/lights/yellowflare.png",
+                {
+                    scale: 30,
+                    opacity: 1
+                }
+            );
+
+        flash._billboard.color =
+            new Cesium.Color(
+                1,
+                1,
+                0.9,
+                1
+            );
+
+        const fireball =
+            new geofs.api.billboard(
+                location,
+                "images/lights/yellowflare.png",
+                {
+                    scale: 8,
+                    opacity: 1
+                }
+            );
+
+        fireball._billboard.color =
+            new Cesium.Color(
+                1,
+                0.45,
+                0,
+                1
+            );
+createScorchMark(
+    location
+);
+
+        const start =
+            Date.now();
+
+        const anim =
+            setInterval(() => {
+
+            const age =
+                (Date.now() - start) /
+                1000;
+
+            flash._billboard.scale =
+                30 + age * 50;
+
+            flash._billboard.color.alpha =
+                Math.max(
+                    0,
+                    1 - age * 8
+                );
+
+            fireball._billboard.scale =
+                8 + age * 20;
+
+            fireball._billboard.color.alpha =
+                Math.max(
+                    0,
+                    1 - age * 0.75
+                );
+
+            if (age > 8) {
+
+                clearInterval(anim);
+
+              try {
+    flash.destroy();
+} catch (e) {}
+
+try {
+    fireball.destroy();
+} catch (e) {}
+
+try {
+    smokeEmitter.destroy();
+} catch (e) {}
+            }
+
+        }, 30);
+    }
+
+    //--------------------------------------------------
+    // LAUNCH KEY
+    //--------------------------------------------------
+
+document.addEventListener(
+    "keydown",
+    function (e) {
+
+        if (e.code !== "Period") {
+            return;
+        }
+
+        if (periodHeldSince === null) {
+
+            periodHeldSince =
+                Date.now();
+
+            launchMissile();
+        }
+
+    },
+    true
+);
+    //--------------------------------------------------
+// RELOAD MISSILES
+//--------------------------------------------------
+
+document.addEventListener(
+    "keyup",
+    function (e) {
+
+        if (
+            e.code !== "Period"
+        ) {
+            return;
+        }
+
+        if (
+            periodHeldSince === null
+        ) {
+
+            return;
+        }
+
+        const holdTime =
+            Date.now() -
+            periodHeldSince;
+
+        if (
+            holdTime >= 5000
+        ) {
+
+            missileCount =
+                MAX_MISSILES;
+
+            updateMissileCounter();
+
+            console.log(
+                "[MISSILE] RELOADED"
+            );
+        }
+
+        periodHeldSince =
+            null;
+    },
+    true
+);
+
+    //--------------------------------------------------
+    // LAUNCH
+    //--------------------------------------------------
+
+    function launchMissile() {
+if (missileCount <= 0) {
+
+    console.log(
+        "[MISSILE] OUT OF MISSILES"
+    );
+
+    return;
+}
+        const launchTarget =
+            window.geofsCombatTarget;
+if (
+    !launchTarget ||
+    !launchTarget.referencePoint ||
+    !launchTarget.referencePoint.lla
+) {
+
+    console.log(
+        "[MISSILE] NO LOCK"
+    );
+
+    return;
+}
+
+console.log(
+    "[MISSILE TARGET]",
+    launchTarget.callsign
+);
+        if (
+            !launchTarget ||
+            !launchTarget.referencePoint ||
+            !launchTarget.referencePoint.lla
+        ) {
+            window.missileDebugTarget =
+    launchTarget.callsign;
+
+window.missileDebugRange =
+    distance;
+
+            console.log(
+                "[MISSILE] NO LOCK"
+            );
+
+            return;
+        }
+
+        const aircraft =
+            geofs.aircraft.instance;
+if (
+    aircraft.llaLocation[2] -
+    (geofs.groundElevation || -10)
+    < 0
+) {
+
+    console.log(
+        "[MISSILE] TOO LOW"
+    );
+
+    return;
+}
+        if (!aircraft) {
+            return;
+        }
+
+
+        const origin =
+            [...aircraft.llaLocation];
+const targetXYZ =
+    llaToLocalXYZ(
+        origin,
+        launchTarget.referencePoint.lla
+    );
+
+const headingRad =
+    geofs.animation.values.heading360 *
+    Math.PI / 180;
+
+const forwardVector = [
+    Math.sin(headingRad),
+    Math.cos(headingRad)
+];
+
+const targetVector = [
+    targetXYZ[0],
+    targetXYZ[1]
+];
+
+const targetLength =
+    Math.sqrt(
+        targetVector[0] * targetVector[0] +
+        targetVector[1] * targetVector[1]
+    );
+
+if (targetLength > 0) {
+
+    targetVector[0] /= targetLength;
+    targetVector[1] /= targetLength;
+
+    const dot =
+        forwardVector[0] * targetVector[0] +
+        forwardVector[1] * targetVector[1];
+
+    if (dot < 0.5) { //0<dot<1; the closer to 1, the narrower the cone//
+
+        console.log(
+            "[MISSILE] TARGET NOT FORWARD"
+        );
+
+        return;
+    }
+}
+        //--------------------------------------------------
+        // INITIAL POSITION
+        //--------------------------------------------------
+
+        const heading =
+            geofs.animation.values.heading360 *
+            Math.PI / 180;
+
+        const pitch =
+            -(aircraft.object3d?.htr?.[1] || 0) *
+            Math.PI / 180;
+
+        const spawnDistance = 20;
+
+        let missileXYZ = [
+
+            Math.sin(heading) *
+            spawnDistance,
+
+            Math.cos(heading) *
+            spawnDistance,
+
+            Math.sin(pitch) *
+            spawnDistance
+
+        ];
+
+        //--------------------------------------------------
+        // CREATE MISSILE
+        //--------------------------------------------------
+
+        const startOffset =
+            geofs.api.xyz2lla(
+                missileXYZ,
+                origin
+            );
+
+        const spawnPoint = [
+
+            origin[0] +
+            startOffset[0],
+
+            origin[1] +
+            startOffset[1],
+
+            origin[2] +
+            startOffset[2]
+
+        ];
+missileCount--;
+        updateMissileCounter();
+        const missile =
+            new geofs.api.billboard(
+                spawnPoint,
+                "images/lights/yellowflare.png",
+                {
+                    scale: 5,
+                    opacity: 1
+                }
+            );
+
+        missile._billboard.color =
+            new Cesium.Color(
+                1,
+                0.3,
+                0.1,
+                1
+            );
+
+        //--------------------------------------------------
+        // SPEED
+        //--------------------------------------------------
+
+        let aircraftSpeed = 250;
+
+        if (
+            aircraft.velocity
+        ) {
+
+            aircraftSpeed =
+                Math.sqrt(
+
+                    aircraft.velocity[0] *
+                    aircraft.velocity[0]
+
+                    +
+
+                    aircraft.velocity[1] *
+                    aircraft.velocity[1]
+
+                    +
+
+                    aircraft.velocity[2] *
+                    aircraft.velocity[2]
+                );
+        }
+
+ let speed =
+    Math.max(
+        aircraftSpeed * 1.3,
+        250
+    );
+
+        const maxSpeed =
+    Math.max(
+        aircraftSpeed * 5.0,
+        800
+    );
+
+        //--------------------------------------------------
+        // INITIAL VELOCITY
+        //--------------------------------------------------
+
+        let velocity = [
+
+            Math.sin(heading) *
+            speed,
+
+            Math.cos(heading) *
+            speed,
+
+            Math.sin(pitch) *
+            speed
+
+        ];
+
+        //--------------------------------------------------
+        // UPDATE
+        //--------------------------------------------------
+
+        let lastTime =
+            Date.now();
+
+        const startTime =
+            Date.now();
+
+        let lastSmoke = 0;
+const missileInfo = {
+
+    target:
+        launchTarget.callsign,
+
+    distance: 0,
+
+    tti: 0
+};
+
+activeMissiles.push(
+    missileInfo
+);
+        const update =
+            setInterval(() => {
+
+            const now =
+                Date.now();
+
+            const dt =
+                (now - lastTime) /
+                1000;
+
+            lastTime =
+                now;
+
+            //--------------------------------------------------
+            // TARGET XYZ
+            //--------------------------------------------------
+
+            const targetXYZ =
+                llaToLocalXYZ(
+                    origin,
+                    launchTarget.referencePoint.lla
+                );
+
+            //--------------------------------------------------
+            // SEEK VECTOR
+            //--------------------------------------------------
+
+            let dx =
+                targetXYZ[0] -
+                missileXYZ[0];
+
+            let dy =
+                targetXYZ[1] -
+                missileXYZ[1];
+
+            let dz =
+                targetXYZ[2] -
+                missileXYZ[2];
+
+           const distance =
+    Math.sqrt(
+        dx * dx +
+        dy * dy +
+        dz * dz
+    );
+const chaffed =
+    Math.random() < 0.20;
+
+const fuseRadius =
+    chaffed
+        ? 200
+        : 1;
+
+console.log(
+    chaffed
+        ? "[MISSILE] CHAFFED"
+        : "[MISSILE] CLEAN"
+);
+if (distance > 1) {
+
+    dx /= distance;
+    dy /= distance;
+    dz /= distance;
+}
+
+//--------------------------------------
+// SPEED
+//--------------------------------------
+
+speed +=
+    200 * dt;
+
+if (speed > maxSpeed) {
+
+    speed = maxSpeed;
+}
+
+const closingSpeed =
+    Math.max(
+        speed,
+        1
+    );
+
+//--------------------------------------
+// MISSILE DATA
+//--------------------------------------
+
+missileInfo.distance =
+    distance / 1852;
+
+missileInfo.tti =
+    distance /
+    closingSpeed;
+
+//--------------------------------------
+// HUD
+//--------------------------------------
+
+if (
+    activeMissiles.length > 0
+) {
+
+    let priorityMissile =
+        activeMissiles[0];
+
+    for (
+        const m
+        of activeMissiles
+    ) {
+
+        if (
+            m.tti <
+            priorityMissile.tti
+        ) {
+
+            priorityMissile = m;
+        }
+    }
+
+    missileHud.textContent =
+`MISSILES ${activeMissiles.length}
+
+TGT ${priorityMissile.target}
+
+RNG ${priorityMissile.distance.toFixed(1)} nm
+
+TTI ${priorityMissile.tti.toFixed(1)} s`;
+}
+
+//--------------------------------------
+// GUIDANCE
+//--------------------------------------
+
+const steer =
+    0.1;
+
+velocity[0] =
+    velocity[0] *
+    (1 - steer)
+    +
+    dx * speed *
+    steer;
+
+velocity[1] =
+    velocity[1] *
+    (1 - steer)
+    +
+    dy * speed *
+    steer;
+
+velocity[2] =
+    velocity[2] *
+    (1 - steer)
+    +
+    dz * speed *
+    steer;
+
+            //--------------------------------------------------
+            // MOVE
+            //--------------------------------------------------
+
+            missileXYZ[0] +=
+                velocity[0] * dt;
+
+            missileXYZ[1] +=
+                velocity[1] * dt;
+
+            missileXYZ[2] +=
+                velocity[2] * dt;
+
+            const offset =
+                geofs.api.xyz2lla(
+                    missileXYZ,
+                    origin
+                );
+
+            const location = [
+
+                origin[0] +
+                offset[0],
+
+                origin[1] +
+                offset[1],
+
+                origin[2] +
+                offset[2]
+
+            ];
+
+            missile.setLocation(
+                location
+            );
+
+            //--------------------------------------------------
+            // SMOKE
+            //--------------------------------------------------
+
+            if (
+                now - lastSmoke >
+                20
+            ) {
+
+                lastSmoke =
+                    now;
+
+                try {
+
+                    const puff =
+                        new geofs.fx.ParticleEmitter({
+
+                            off: 0,
+
+                            location:
+                                location,
+
+                            duration: 450,
+
+                            rate: 0.008,
+
+                            life: 9000,
+
+                            easing:
+                                "easeOutQuart",
+
+                            startScale:
+                                0.02,
+
+                            endScale:
+                                0.15,
+
+                            randomizeStartScale:
+                                0.003,
+
+                            randomizeEndScale:
+                                0.015,
+
+                            startOpacity:
+                                0.55,
+
+                            endOpacity:
+                                0,
+
+                            startRotation:
+                                "random",
+
+                            texture:
+                                "whitesmoke"
+                        });
+
+                    setTimeout(() => {
+
+                        try {
+                            puff.destroy();
+                        } catch (e) {}
+
+                    }, 9000);
+
+                } catch (e) {}
+            }
+
+            //--------------------------------------------------
+            // PROXIMITY FUSE
+            //--------------------------------------------------
+if (
+    distance < fuseRadius
+) {
+
+                createExplosion(
+                    launchTarget.referencePoint.lla
+                );
+
+                clearInterval(
+                    update
+                );
+
+                try {
+                    missile.destroy();
+                } catch (e) {}
+
+               const idx =
+    activeMissiles.indexOf(
+        missileInfo
+    );
+
+if (idx !== -1) {
+
+    activeMissiles.splice(
+        idx,
+        1
+    );
+}
+missileHud.textContent =
+    "";
+                console.log(
+                    "[MISSILE] PROXIMITY HIT:",
+                    launchTarget.callsign
+                );
+
+                return;
+            }
+
+            //--------------------------------------------------
+            // TIMEOUT
+            //--------------------------------------------------
+
+            if (
+                now - startTime >
+                45000
+            ) {
+
+                clearInterval(
+                    update
+                );
+
+                try {
+                    missile.destroy();
+                } catch (e) {}
+
+               const idx =
+    activeMissiles.indexOf(
+        missileInfo
+    );
+
+if (idx !== -1) {
+
+    activeMissiles.splice(
+        idx,
+        1
+    );
+}
+missileHud.textContent =
+    "";
+            }
+        }, 20);
+    }
+
+})();
