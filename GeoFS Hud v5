@@ -1,0 +1,442 @@
+// ==UserScript==
+// @name         GeoFS HUD v5
+// @namespace    GeoFS
+// @version      5.0
+// @match        https://*.geo-fs.com/geofs.php*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+//--------------------------------------------------
+// REMOVE GOOGLE ADS
+//--------------------------------------------------
+
+function removeAds() {
+
+    const adIds = [
+
+        "aswift_0",
+        "aswift_1",
+        "google_esf",
+        "ssIFrame_google"
+
+    ];
+
+    for (const id of adIds) {
+
+        const frame =
+            document.getElementById(id);
+
+        if (frame) {
+
+            frame.style.display =
+                "none";
+        }
+    }
+}
+
+
+    const hudCenterX = 44.5;
+    const hudCenterY = 30;
+
+    let displayVertical = 0;
+    let displayHorizontal = 0;
+    let ccipDisplay = 0;
+    let recoilOffset = 0;
+
+    //
+    // HUD RECOIL
+    //
+    document.addEventListener(
+        "keydown",
+        function (e) {
+
+            if (e.code === "Space") {
+
+                recoilOffset -= 6;
+
+            }
+
+        },
+        true
+    );
+
+    //
+    // HUD CONTAINER
+    //
+    const hud = document.createElement("div");
+
+    hud.style.position = "fixed";
+    hud.style.left = "0";
+    hud.style.top = "0";
+    hud.style.width = "100%";
+    hud.style.height = "100%";
+    hud.style.pointerEvents = "none";
+    hud.style.zIndex = "99999";
+
+    document.body.appendChild(hud);
+
+    //
+    // HUD BUTTON
+    //
+    const hudButton =
+        document.createElement("button");
+
+    hudButton.textContent =
+        "HUD ON";
+
+    hudButton.style.position =
+        "fixed";
+
+    hudButton.style.left =
+        "1290px";
+
+    hudButton.style.top =
+        "65%";
+
+    hudButton.style.transform =
+        "translateY(-50%)";
+
+    hudButton.style.zIndex =
+        "100000";
+
+    hudButton.style.background =
+        "rgba(0,0,0,0.7)";
+
+    hudButton.style.color =
+        "lime";
+
+    hudButton.style.border =
+        "1px solid lime";
+
+    hudButton.style.boxShadow =
+        "0 0 10px lime";
+
+    hudButton.style.textShadow =
+        "0 0 5px lime";
+
+    hudButton.style.padding =
+        "8px 12px";
+
+    hudButton.style.cursor =
+        "pointer";
+
+    hudButton.style.fontFamily =
+        "monospace";
+
+    document.body.appendChild(
+        hudButton
+    );
+//--------------------------------------------------
+// SIDE HUD PANEL
+//--------------------------------------------------
+
+const sidePanel =
+    document.createElement("div");
+sidePanel.style.position =
+    "fixed";
+sidePanel.style.right =
+    "0";
+
+sidePanel.style.top =
+    "0";
+
+sidePanel.style.bottom =
+    "0";
+
+sidePanel.style.width =
+    "160px";
+
+sidePanel.style.background =
+    "black";
+
+sidePanel.style.zIndex =
+    "99998";
+
+sidePanel.style.pointerEvents =
+    "none";
+
+document.body.appendChild(
+    sidePanel
+);
+    let hudEnabled = true;
+
+    hudButton.addEventListener(
+        "click",
+        function () {
+
+            hudEnabled =
+                !hudEnabled;
+
+            hud.style.display =
+                hudEnabled
+                    ? "block"
+                    : "none";
+
+            hudButton.textContent =
+                hudEnabled
+                    ? "HUD ON"
+                    : "HUD OFF";
+        }
+    );
+
+    //
+    // BORESIGHT
+    //
+    const gunsight =
+        document.createElement("div");
+
+    gunsight.textContent = "⌖";
+
+    gunsight.style.position =
+        "absolute";
+
+    gunsight.style.left =
+        hudCenterX + "%";
+
+    gunsight.style.top =
+        hudCenterY + "%";
+
+    gunsight.style.transform =
+        "translate(-50%, -50%)";
+
+    gunsight.style.color =
+        "lime";
+
+    gunsight.style.fontSize =
+        "86px";
+
+    gunsight.style.fontWeight =
+        "normal";
+
+    gunsight.style.fontFamily =
+        "monospace";
+
+    gunsight.style.textShadow =
+        "0 0 8px lime";
+
+    hud.appendChild(gunsight);
+
+    //
+    // ACCELERATION CUE
+    //
+    const accelCue =
+        document.createElement("div");
+
+    accelCue.textContent = "○";
+
+    accelCue.style.position =
+        "absolute";
+
+    accelCue.style.left =
+        hudCenterX + "%";
+
+    accelCue.style.top =
+        hudCenterY + "%";
+
+    accelCue.style.transform =
+        "translate(-50%, -50%)";
+
+    accelCue.style.color =
+        "lime";
+
+    accelCue.style.fontSize =
+        "16px";
+
+    accelCue.style.fontWeight =
+        "bold";
+
+    accelCue.style.fontFamily =
+        "monospace";
+
+    accelCue.style.textShadow =
+        "0 0 8px lime";
+
+    hud.appendChild(accelCue);
+
+    //
+    // CCIP
+    //
+    const ccip =
+        document.createElement("div");
+
+    ccip.textContent = "⊙";
+
+    ccip.style.position =
+        "absolute";
+
+    ccip.style.left =
+        hudCenterX + "%";
+
+    ccip.style.top =
+        hudCenterY + "%";
+
+    ccip.style.transform =
+        "translate(-50%, -50%)";
+
+    ccip.style.color =
+        "lime";
+
+    ccip.style.fontSize =
+        "28px";
+
+    ccip.style.fontFamily =
+        "monospace";
+
+    ccip.style.textShadow =
+        "0 0 8px lime";
+
+    hud.appendChild(ccip);
+
+    //
+    // PREVIOUS VELOCITY
+    //
+    let previousVz = null;
+    let previousVx = null;
+
+    //
+    // UPDATE LOOP
+    //
+    setInterval(function () {
+
+        try {
+
+            //
+            // RECOIL RECOVERY
+            //
+            recoilOffset *= 0.85;
+
+            const aircraft =
+                geofs.aircraft.instance;
+
+            if (
+                !aircraft ||
+                !aircraft.velocity
+            ) {
+                return;
+            }
+
+            const vx =
+                aircraft.velocity[0] || 0;
+
+            const vy =
+                aircraft.velocity[1] || 0;
+
+            const vz =
+                aircraft.velocity[2] || 0;
+
+            const altitude =
+                aircraft.llaLocation?.[2] || 0;
+
+            const terrain =
+                geofs.groundElevation || 0;
+
+            const agl =
+                Math.max(
+                    altitude - terrain,
+                    0
+                );
+
+            //
+            // ACCELERATION CUE
+            //
+            if (
+                previousVz !== null &&
+                previousVx !== null
+            ) {
+
+                const dvz =
+                    vz - previousVz;
+
+                const dvx =
+                    vx - previousVx;
+
+                const accelVertical =
+                    dvz * 15;
+
+                const accelHorizontal =
+                    -dvx * 10;
+
+                displayVertical =
+                    displayVertical * 0.8 +
+                    accelVertical * 0.2;
+
+                displayHorizontal =
+                    displayHorizontal * 0.8 +
+                    accelHorizontal * 0.2;
+            }
+
+            //
+            // APPLY RECOIL
+            //
+            gunsight.style.top =
+                `calc(${hudCenterY}% + ${recoilOffset}px)`;
+
+            accelCue.style.left =
+                `calc(${hudCenterX}% + ${displayHorizontal}px)`;
+
+            accelCue.style.top =
+                `calc(${hudCenterY}% + ${displayVertical + recoilOffset}px)`;
+
+            //
+            // CCIP
+            //
+            const pitch =
+                -(aircraft.object3d?.htr?.[1] || 0) *
+                Math.PI / 180;
+
+            const launchSpeed = 450;
+
+            let bulletVz =
+                Math.sin(pitch) *
+                launchSpeed;
+
+            bulletVz += vz;
+
+            let impactTime = 0;
+
+            if (Math.abs(bulletVz) > 1) {
+
+                impactTime =
+                    agl /
+                    Math.abs(bulletVz);
+
+            } else {
+
+                impactTime =
+                    agl /
+                    launchSpeed;
+            }
+
+            const ballisticOffset =
+                impactTime * 60;
+
+            ccipDisplay =
+                ccipDisplay * 0.9 +
+                ballisticOffset * 0.1;
+
+            ccip.style.left =
+                hudCenterX + "%";
+
+            ccip.style.top =
+                `calc(${hudCenterY}% + ${ccipDisplay}px)`;
+
+            previousVz = vz;
+            previousVx = vx;
+
+        } catch (e) {
+
+            console.log(
+                "HUD Error:",
+                e
+            );
+        }
+
+    }, 50);
+//--------------------------------------------------
+    // START BANNER REPLACEMENT
+    //--------------------------------------------------
+
+
+})();
