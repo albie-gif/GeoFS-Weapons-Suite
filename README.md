@@ -38,6 +38,6 @@ Works in conjunction with the Target Tracker (and not without). If MA is on and 
 - Known bugs: missiles will still follow aircraft if targeted but not locked having been locked.
 - Upcoming developments: sounds; missile model visualisation; hit/miss based on behaviour; multiplayer?.
 
-# GeoFS Flight Data Block
+### GeoFS Flight Data Block
 Throwing this in for good measure. A block appears in the right HUD panel showing digital values for speed (SPD), altitude (ALT), altitude above ground level (AGL), vertical speed (V/S) and G-forces (G). Values are approximated based on aircraft location data, so are not perfectly accurate (though more accurate than using analogue dials for landing, for example).
 - Known bugs: none. 
