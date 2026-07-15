@@ -1,0 +1,878 @@
+// ==UserScript==
+// @name         GeoFS Target Tracker v10
+// @namespace    GeoFS
+// @version      3.0
+// @match        https://*.geo-fs.com/geofs.php*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+console.log("TRACKER STARTED");
+let targetList = [];
+let selectedTargetIndex = 0;
+let lockedTarget = null;
+let masterArm = false;
+let lockStartTime = null;
+let hardLocked = false;
+
+const TARGET_RANGE = 40; // selectable
+const LOCK_RANGE = 15;   // lockable
+const LOCK_FOV = 20;     // degrees
+const LOCK_TIME = 3000;  // milliseconds
+
+window.debugTargetNames = [];
+    //--------------------------------------------------
+    // TARGET DISPLAY
+    //--------------------------------------------------
+
+    const tracker = document.createElement("div");
+
+    tracker.style.position = "fixed";
+    tracker.style.right = "0px";
+    tracker.style.top = "0px";
+    tracker.style.zIndex = "100000";
+    tracker.style.color = "lime";
+    tracker.style.textAlign = "right";
+    tracker.style.fontSize = "16px";
+    tracker.style.fontFamily = "monospace";
+    tracker.style.textShadow = "0 0 5px lime";
+    tracker.style.whiteSpace = "pre";
+    tracker.style.pointerEvents = "none";
+tracker.style.background =
+    "rgba(0,0,0,0.75)";
+
+tracker.style.border =
+    "2px solid lime";
+
+tracker.style.borderRadius =
+    "8px";
+
+tracker.style.padding =
+    "10px";
+
+tracker.style.minWidth =
+    "135px";
+
+const lockBar =
+    document.createElement("div");
+
+lockBar.style.fontFamily =
+    "monospace";
+
+lockBar.style.fontWeight =
+    "bold";
+
+lockBar.style.marginBottom =
+    "4px";
+
+lockBar.style.textAlign =
+    "right";
+
+tracker.appendChild(lockBar);
+
+const trackerText =
+    document.createElement("div");
+
+trackerText.textContent =
+    "NO TARGET";
+
+tracker.appendChild(
+    trackerText
+);
+
+document.body.appendChild(tracker);
+    const masterArmButton =
+    document.createElement("div");
+
+masterArmButton.textContent =
+    "MA OFF";
+
+masterArmButton.style.position =
+    "fixed";
+
+masterArmButton.style.left =
+    "1290px";
+
+masterArmButton.style.top =
+    "58%";
+
+masterArmButton.style.transform =
+    "translateY(-50%)";
+
+masterArmButton.style.zIndex =
+    "100000";
+
+masterArmButton.style.color =
+    "lime";
+
+masterArmButton.style.background =
+    "rgba(0,0,0,0.75)";
+
+masterArmButton.style.border =
+    "2px solid lime";
+
+masterArmButton.style.borderRadius =
+    "8px";
+
+masterArmButton.style.padding =
+    "8px";
+
+masterArmButton.style.fontFamily =
+    "monospace";
+
+masterArmButton.style.fontSize =
+    "16px";
+
+masterArmButton.style.cursor =
+    "pointer";
+
+masterArmButton.style.userSelect =
+    "none";
+
+masterArmButton.style.textShadow =
+    "0 0 5px lime";
+
+masterArmButton.style.boxShadow =
+    "0 0 8px lime";
+
+document.body.appendChild(
+    masterArmButton
+);
+    masterArmButton.addEventListener(
+    "click",
+    function () {
+
+        masterArm = !masterArm;
+
+        if (masterArm) {
+
+            masterArmButton.textContent =
+                "MA ON";
+
+            masterArmButton.style.color =
+                "lime";
+
+            masterArmButton.style.borderColor =
+                "lime";
+
+            masterArmButton.style.textShadow =
+                "0 0 5px lime";
+
+            masterArmButton.style.boxShadow =
+                "0 0 8px lime";
+
+        } else {
+
+            window.geofsCombatTarget =
+                null;
+lockedTarget = null;
+
+hardLocked = false;
+
+lockStartTime = null;
+            masterArmButton.textContent =
+                "MA OFF";
+
+            masterArmButton.style.color =
+                "lime";
+
+            masterArmButton.style.borderColor =
+                "lime";
+
+            masterArmButton.style.textShadow =
+                "0 0 5px lime";
+
+            masterArmButton.style.boxShadow =
+                "0 0 8px lime";
+        }
+    }
+);
+    //--------------------------------------------------
+    // TARGET DIAMOND
+    //--------------------------------------------------
+
+    const diamond = document.createElement("div");
+
+    diamond.textContent = "◇";
+
+    diamond.style.position = "fixed";
+    diamond.style.fontSize = "48px";
+    diamond.style.color = "lime";
+    diamond.style.fontFamily = "monospace";
+    diamond.style.textShadow = "0 0 8px lime";
+    diamond.style.pointerEvents = "none";
+    diamond.style.zIndex = "100000";
+    diamond.style.display = "none";
+
+    document.body.appendChild(diamond);
+document.body.appendChild(diamond);
+
+const diamondLockBar =
+    document.createElement("div");
+
+diamondLockBar.style.position =
+    "fixed";
+
+diamondLockBar.style.fontFamily =
+    "monospace";
+
+diamondLockBar.style.fontSize =
+    "6px";
+
+diamondLockBar.style.fontWeight =
+    "bold";
+
+diamondLockBar.style.pointerEvents =
+    "none";
+
+diamondLockBar.style.whiteSpace =
+    "nowrap";
+
+diamondLockBar.style.zIndex =
+    "100000";
+
+diamondLockBar.style.display =
+    "none";
+
+document.body.appendChild(
+    diamondLockBar
+);
+
+//--------------------------------------------------
+// TARGET CYCLE KEY
+//--------------------------------------------------
+
+
+    //--------------------------------------------------
+    // TARGET CYCLE KEY
+    //--------------------------------------------------
+
+document.addEventListener("keydown", function (e) {
+
+    if (e.key.toLowerCase() !== "y") {
+        return;
+    }
+
+    if (targetList.length === 0) {
+        return;
+    }
+
+    //--------------------------------------------------
+    // SHIFT+Y = PREVIOUS TARGET
+    //--------------------------------------------------
+
+    if (e.shiftKey) {
+
+        selectedTargetIndex--;
+
+        if (selectedTargetIndex < 0) {
+            selectedTargetIndex =
+                targetList.length - 1;
+        }
+
+    //--------------------------------------------------
+    // Y = NEXT TARGET
+    //--------------------------------------------------
+
+    } else {
+
+        selectedTargetIndex++;
+
+        if (
+            selectedTargetIndex >=
+            targetList.length
+        ) {
+            selectedTargetIndex = 0;
+        }
+    }
+
+    lockedTarget =
+        targetList[selectedTargetIndex];
+
+    //--------------------------------------------------
+    // FORCE RELOCK
+    //--------------------------------------------------
+
+    lockStartTime = null;
+    hardLocked = false;
+
+    window.geofsCombatTarget = null;
+
+    console.log(
+        "[TARGET]",
+        getTargetName(lockedTarget)
+    );
+});
+
+    //--------------------------------------------------
+    // DISTANCE
+    //--------------------------------------------------
+
+    function distanceNM(a, b) {
+
+        const lat1 = a[0] * Math.PI / 180;
+        const lon1 = a[1] * Math.PI / 180;
+
+        const lat2 = b[0] * Math.PI / 180;
+        const lon2 = b[1] * Math.PI / 180;
+
+        const dLat = lat2 - lat1;
+        const dLon = lon2 - lon1;
+
+        const h =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1) *
+            Math.cos(lat2) *
+            Math.sin(dLon / 2) ** 2;
+
+        const distanceMeters =
+            6371000 *
+            2 *
+            Math.atan2(
+                Math.sqrt(h),
+                Math.sqrt(1 - h)
+            );
+
+        return distanceMeters / 1852;
+    }
+ function bearingDeg(from, to) {
+
+    const lat1 =
+        from[0] * Math.PI / 180;
+
+    const lat2 =
+        to[0] * Math.PI / 180;
+
+    const dLon =
+        (to[1] - from[1]) *
+        Math.PI / 180;
+
+    const y =
+        Math.sin(dLon) *
+        Math.cos(lat2);
+
+    const x =
+        Math.cos(lat1) *
+        Math.sin(lat2) -
+        Math.sin(lat1) *
+        Math.cos(lat2) *
+        Math.cos(dLon);
+
+    return (
+        (Math.atan2(y, x) * 180 / Math.PI)
+        + 360
+    ) % 360;
+}
+
+function angleDifference(a, b) {
+
+    let diff =
+        Math.abs(a - b);
+
+    if (diff > 180) {
+        diff = 360 - diff;
+    }
+
+    return diff;
+}
+
+function getTargetName(user) {
+
+    if (!user) {
+        return "UNKNOWN";
+    }
+
+    const lla =
+        user.referencePoint?.lla || [0, 0, 0];
+
+    return `${user.callsign || "Foo"} [${
+        lla[0].toFixed(3)
+    }, ${
+        lla[1].toFixed(3)
+    }]`;
+}
+
+    //--------------------------------------------------
+    // MAIN UPDATE LOOP
+    //--------------------------------------------------
+
+    setInterval(function () {
+
+        try {
+            if (!masterArm) {
+
+    trackerText.textContent =
+        "MA OFF";
+
+    lockBar.innerHTML = "";
+
+    diamond.style.display =
+        "none";
+
+    diamondLockBar.style.display =
+        "none";
+
+    window.geofsCombatTarget =
+        null;
+
+    hardLocked = false;
+    lockStartTime = null;
+
+    return;
+}
+
+            const aircraft =
+                geofs.aircraft.instance;
+
+            if (
+                !aircraft ||
+                !aircraft.llaLocation
+            ) {
+                return;
+            }
+
+            const playerPos =
+                aircraft.llaLocation;
+
+            const users =
+                multiplayer?.visibleUsers;
+
+            if (!users) {
+
+            trackerText.textContent = "NO TARGET";
+
+                diamond.style.display =
+                    "none";
+diamondLockBar.style.display =
+    "none";
+                return;
+            }
+
+            //--------------------------------------------------
+            // BUILD TARGET LIST
+            //--------------------------------------------------
+
+targetList = [];
+window.debugTargetNames = [];
+
+const heading =
+    aircraft.htr
+        ? aircraft.htr[0]
+        : 0;
+
+for (const user of Object.values(users)) {
+
+    if (
+        !user ||
+        !user.referencePoint ||
+        !user.referencePoint.lla
+    ) {
+        continue;
+    }
+
+    const range =
+        distanceNM(
+            playerPos,
+            user.referencePoint.lla
+        );
+
+
+    if (range > TARGET_RANGE) {
+        continue;
+    }
+
+    const screen =
+        geofs.api.getScreenCoordFromLla(
+            user.referencePoint.lla
+        );
+
+    if (!screen) {
+        continue;
+    }
+
+    const onScreen =
+        screen.x >= 0 &&
+        screen.x <= window.innerWidth &&
+        screen.y >= 0 &&
+        screen.y <= window.innerHeight;
+
+    if (!onScreen) {
+        continue;
+    }
+
+    targetList.push(user);
+
+    window.debugTargetNames.push(
+        getTargetName(user)
+    );
+}
+
+            //--------------------------------------------------
+            // NO TARGETS
+            //--------------------------------------------------
+
+            if (targetList.length === 0) {
+
+          trackerText.textContent = "NO TARGET";
+
+                diamond.style.display =
+                    "none";
+diamondLockBar.style.display =
+    "none";
+                return;
+            }
+
+            //--------------------------------------------------
+            // SORT BY RANGE
+            //--------------------------------------------------
+
+            targetList.sort(function (a, b) {
+
+                const rangeA =
+                    distanceNM(
+                        playerPos,
+                        a.referencePoint.lla
+                    );
+
+                const rangeB =
+                    distanceNM(
+                        playerPos,
+                        b.referencePoint.lla
+                    );
+
+                return rangeA - rangeB;
+            });
+
+            //--------------------------------------------------
+            // KEEP INDEX VALID
+            //--------------------------------------------------
+
+if (
+    selectedTargetIndex >=
+    targetList.length
+) {
+
+    selectedTargetIndex = 0;
+}
+
+if (
+    !lockedTarget &&
+    targetList.length > 0
+) {
+
+    lockedTarget =
+        targetList[0];
+}
+
+            //--------------------------------------------------
+            // CURRENT TARGET
+            //--------------------------------------------------
+
+let target =
+    lockedTarget;
+const targetStillExists =
+    Object.values(users).find(u =>
+        u === target
+    );
+
+if (!targetStillExists) {
+
+    lockedTarget =
+        targetList[0];
+
+    hardLocked = false;
+    lockStartTime = null;
+
+    window.geofsCombatTarget = null;
+
+    console.log(
+        "[AUTO-RELOCK]",
+        lockedTarget.callsign
+    );
+
+    target =
+        lockedTarget;
+
+} else {
+
+    target =
+        targetStillExists;
+}
+            const range =
+                distanceNM(
+                    playerPos,
+                    target.referencePoint.lla
+                );
+            if (range > TARGET_RANGE) {
+
+    console.log(
+        "[TARGET LOST]",
+        getTargetName(target)
+    );
+
+    lockedTarget = null;
+
+    hardLocked = false;
+    lockStartTime = null;
+
+    window.geofsCombatTarget = null;
+
+    return;
+}
+const targetBearing =
+    bearingDeg(
+        playerPos,
+        target.referencePoint.lla
+    );
+
+const lockDifference =
+    angleDifference(
+        heading,
+        targetBearing
+    );
+
+const inLockCone =
+    lockDifference <= LOCK_FOV;
+
+const inLockRange =
+    range <= LOCK_RANGE;
+            let lockPercent = 0;
+
+if (
+    inLockCone &&
+    inLockRange
+) {
+
+    if (!lockStartTime) {
+        lockStartTime = Date.now();
+    }
+
+    lockPercent =
+        Math.min(
+            100,
+            (
+                (Date.now() - lockStartTime)
+                / LOCK_TIME
+            ) * 100
+        );
+    if (
+        Date.now() - lockStartTime >=
+        LOCK_TIME
+    ) {
+
+        hardLocked = true;
+
+ if (masterArm) {
+
+    window.geofsCombatTarget =
+        target;
+}
+    }
+
+} else {
+
+    lockStartTime = null;
+    hardLocked = false;
+    lockPercent = 0;
+}
+lockBar.innerHTML = "";
+
+const filledSegments =
+    Math.floor(lockPercent / 6.25);
+diamondLockBar.innerHTML = "";
+for (let i = 0; i < 16; i++) {
+
+    const segment =
+        document.createElement("span");
+
+    segment.textContent = "█";
+
+    segment.style.color =
+        i < filledSegments
+        ? "red"
+        : "lime";
+
+    lockBar.appendChild(segment);
+    const miniSegment =
+    document.createElement("span");
+
+miniSegment.textContent = "█";
+
+miniSegment.style.color =
+    i < filledSegments
+    ? "red"
+    : "lime";
+
+diamondLockBar.appendChild(
+    miniSegment
+);
+}
+
+//--------------------------------------------------
+// INFO DISPLAY
+//--------------------------------------------------
+const targetName =
+    (target.callsign || "UNKNOWN")
+        .substring(0, 16);
+const coords =
+    `${target.referencePoint.lla[0].toFixed(3)}, ${
+        target.referencePoint.lla[1].toFixed(3)
+    }`;
+
+trackerText.textContent =
+`${hardLocked ? "TARGET LOCKED" : "TRACKING"}
+
+${targetName.substring(0,16)}
+
+${coords}
+
+RNG ${range.toFixed(1)} nm
+
+TGT ${targetList.length} (${selectedTargetIndex + 1}/${targetList.length})
+
+`;
+            //--------------------------------------------------
+            // SCREEN POSITION
+            //--------------------------------------------------
+
+            const screen =
+                geofs.api.getScreenCoordFromLla(
+                    target.referencePoint.lla
+                );
+
+           if (!screen) {
+
+    diamond.style.display =
+        "none";
+diamondLockBar.style.display =
+    "none";
+} else {
+
+    //--------------------------------------------------
+    // TARGET ON SCREEN
+    //--------------------------------------------------
+
+    if (
+        screen.x >= 0 &&
+        screen.x <= window.innerWidth &&
+        screen.y >= 0 &&
+        screen.y <= window.innerHeight
+    ) {
+if (hardLocked) {
+
+    diamond.style.color = "red";
+    diamond.style.textShadow =
+        "0 0 8px red";
+
+} else {
+
+    diamond.style.color = "lime";
+    diamond.style.textShadow =
+        "0 0 8px lime";
+}
+        diamond.textContent =
+            "◇";
+
+        diamond.style.display =
+            "block";
+
+        diamond.style.left =
+            (screen.x - 24) + "px";
+
+        diamond.style.top =
+            (screen.y - 24) + "px";
+        diamondLockBar.style.display =
+    "block";
+
+diamondLockBar.style.left =
+    (screen.x - 32) + "px";
+
+diamondLockBar.style.top =
+    (screen.y + 6) + "px";
+
+    }
+
+    //--------------------------------------------------
+    // TARGET OFF SCREEN
+    //--------------------------------------------------
+
+    else {
+
+        diamond.style.display =
+            "block";
+
+        let x =
+            Math.max(
+                20,
+                Math.min(
+                    window.innerWidth - 20,
+                    screen.x
+                )
+            );
+
+        let y =
+            Math.max(
+                20,
+                Math.min(
+                    window.innerHeight - 20,
+                    screen.y
+                )
+            );
+
+        diamond.style.left =
+            x + "px";
+
+        diamond.style.top =
+            y + "px";
+diamondLockBar.style.display =
+    "block";
+
+diamondLockBar.style.left =
+    (screen.x - 32) + "px";
+
+diamondLockBar.style.top =
+    (screen.y + 24) + "px";
+        if (
+            Math.abs(
+                screen.x -
+                window.innerWidth / 2
+            )
+            >
+            Math.abs(
+                screen.y -
+                window.innerHeight / 2
+            )
+        ) {
+
+            diamond.textContent =
+                screen.x < 0
+                ? "← TGT"
+                : "TGT →";
+
+        } else {
+
+            diamond.textContent =
+                screen.y < 0
+                ? "↑ TGT"
+                : "TGT ↓";
+        }
+    }
+}
+} catch (e) {
+
+trackerText.textContent = "NO TARGET";
+
+    diamond.style.display =
+        "none";
+diamondLockBar.style.display =
+    "none";
+    console.log(
+        "[TRACKER ERROR]",
+        e
+    );
+}
+
+}, 50);
+
+})();
