@@ -1,0 +1,552 @@
+// ==UserScript==
+// @name         GeoFS Gun System v8
+// @namespace    GeoFS
+// @version      8.0
+// @match        https://*.geo-fs.com/geofs.php*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    ////////////////////////////////////////////////////
+    // CONFIG
+    ////////////////////////////////////////////////////
+
+    const FIRE_RATE = 80;
+    const PROJECTILE_LIFE = 700;
+
+    const GUN_FORWARD_OFFSET = 8;
+    const GUN_SIDE_OFFSET = 2;
+
+    const TRACER_EVERY = 5;
+    const IMPACT_RADIUS = 20;
+
+    let fireLoop = null;
+    let shotCounter = 0;
+
+    ////////////////////////////////////////////////////
+    // IMPACT EFFECT
+    ////////////////////////////////////////////////////
+
+    function createImpact(location) {
+
+        try {
+
+            const mark =
+                new geofs.api.billboard(
+                    location,
+                    "images/lights/yellowflare.png",
+                    {
+                        scale: 0.8,
+                        opacity: 1
+                    }
+                );
+
+            mark._billboard.color =
+                new Cesium.Color(
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.7
+                );
+
+            const start = Date.now();
+
+            const effect = setInterval(() => {
+
+                const age =
+                    (Date.now() - start) / 1000;
+
+                mark._billboard.scale =
+                    0.8 + age * 3;
+
+                mark._billboard.color.alpha =
+                    Math.max(
+                        0,
+                        0.7 - age * 3
+                    );
+
+                if (age > 0.25) {
+
+                    clearInterval(effect);
+
+                    try {
+                        mark.destroy();
+                    } catch (e) {}
+
+                }
+
+            }, 30);
+
+        } catch (e) {}
+    }
+
+    ////////////////////////////////////////////////////
+    // MUZZLE FLASH
+    ////////////////////////////////////////////////////
+
+    function muzzleFlash(location) {
+
+        try {
+
+            const flash =
+                new geofs.api.billboard(
+                    location,
+                    "images/lights/yellowflare.png",
+                    {
+                        scale: 1.5,
+                        opacity: 0.5
+                    }
+                );
+
+            flash._billboard.color =
+                new Cesium.Color(
+                    1.0,
+                    0.75,
+                    0.35,
+                    0.4
+                );
+
+            setTimeout(() => {
+
+                try {
+                    flash.destroy();
+                } catch (e) {}
+
+            }, 80);
+
+        } catch (e) {}
+    }
+
+    ////////////////////////////////////////////////////
+    // FIRE PROJECTILE
+    ////////////////////////////////////////////////////
+
+    function fireGun(sideOffset) {
+
+        const aircraft =
+            geofs.aircraft.instance;
+
+        if (!aircraft) {
+            return;
+        }
+
+        shotCounter++;
+
+        const tracer =
+            (shotCounter % TRACER_EVERY === 0);
+
+        const origin =
+            [...aircraft.llaLocation];
+
+        const heading =
+            geofs.animation.values.heading360 *
+            Math.PI / 180;
+
+        const pitch =
+            -(aircraft.object3d?.htr?.[2] || 0) *
+            Math.PI / 180;
+
+        ////////////////////////////////////////////////////
+        // GUN POSITION
+        ////////////////////////////////////////////////////
+
+const roll =
+    (aircraft.object3d?.htr?.[2] || 0) *
+    Math.PI / 180;
+
+const wingX =
+    Math.cos(heading) *
+    sideOffset *
+    Math.cos(roll);
+
+const wingY =
+    -Math.sin(heading) *
+    sideOffset *
+    Math.cos(roll);
+
+const wingZ =
+    sideOffset *
+    Math.sin(roll);
+
+let position = [
+
+    Math.sin(heading) *
+        GUN_FORWARD_OFFSET +
+
+        wingX,
+
+    Math.cos(heading) *
+        GUN_FORWARD_OFFSET +
+
+        wingY,
+
+    Math.sin(pitch) *
+        GUN_FORWARD_OFFSET +
+
+        wingZ
+
+];
+
+        const offset =
+            geofs.api.xyz2lla(
+                position,
+                origin
+            );
+
+        const spawn = [
+
+            origin[0] + offset[0],
+            origin[1] + offset[1],
+            origin[2] + offset[2]
+
+        ];
+
+        muzzleFlash(spawn);
+
+        ////////////////////////////////////////////////////
+        // PROJECTILE
+        ////////////////////////////////////////////////////
+
+        const projectile =
+            new geofs.api.billboard(
+                spawn,
+                "images/lights/yellowflare.png",
+                {
+                    scale:
+                        tracer
+                        ? 0.50
+                        : 0.40,
+                    opacity: 0.55
+                }
+            );
+
+        projectile._billboard.color =
+            new Cesium.Color(
+                1.0,
+                0.75,
+                0.35,
+                0.55
+            );
+
+        ////////////////////////////////////////////////////
+        // TRACER
+        ////////////////////////////////////////////////////
+
+        const tracerLine =
+            geofs.api.viewer.entities.add({
+
+                polyline: {
+
+                    positions: [],
+
+                    width:
+                        tracer ? 3 : 1,
+
+                    material:
+                        new Cesium.Color(
+                            1.0,
+                            0.75,
+                            0.35,
+                            0.55
+                        )
+
+                }
+
+            });
+
+        ////////////////////////////////////////////////////
+        // SPEED
+        ////////////////////////////////////////////////////
+
+        const aircraftSpeed =
+
+            aircraft.velocity ?
+
+            Math.sqrt(
+
+                aircraft.velocity[0] *
+                aircraft.velocity[0]
+
+                +
+
+                aircraft.velocity[1] *
+                aircraft.velocity[1]
+
+                +
+
+                aircraft.velocity[2] *
+                aircraft.velocity[2]
+
+            )
+
+            : 0;
+
+        const launchSpeed =
+            Math.max(
+                257,
+                aircraftSpeed + 300
+            );
+
+        const velocity = [
+
+            Math.sin(heading) *
+                launchSpeed,
+
+            Math.cos(heading) *
+                launchSpeed,
+
+            Math.sin(pitch) *
+                launchSpeed
+
+        ];
+
+        if (aircraft.velocity) {
+
+            velocity[0] +=
+                aircraft.velocity[0];
+
+            velocity[1] +=
+                aircraft.velocity[1];
+
+            velocity[2] +=
+                aircraft.velocity[2];
+        }
+
+        ////////////////////////////////////////////////////
+        // UPDATE LOOP
+        ////////////////////////////////////////////////////
+
+        const startTime =
+            Date.now();
+
+        let lastTime =
+            Date.now();
+
+        const update =
+            setInterval(() => {
+
+                const now =
+                    Date.now();
+
+                const dt =
+                    (now - lastTime) / 1000;
+
+                lastTime =
+                    now;
+
+                position[0] +=
+                    velocity[0] * dt;
+
+                position[1] +=
+                    velocity[1] * dt;
+
+                position[2] +=
+                    velocity[2] * dt;
+
+                const currentOffset =
+                    geofs.api.xyz2lla(
+                        position,
+                        origin
+                    );
+
+                const currentLocation = [
+
+                    origin[0] +
+                    currentOffset[0],
+
+                    origin[1] +
+                    currentOffset[1],
+
+                    origin[2] +
+                    currentOffset[2]
+
+                ];
+
+                projectile.setLocation(
+                    currentLocation
+                );
+
+                ////////////////////////////////////////////////////
+                // TRACER SEGMENT
+                ////////////////////////////////////////////////////
+
+                const tracerLength = 80;
+
+                const speed =
+                    Math.sqrt(
+
+                        velocity[0] *
+                        velocity[0]
+
+                        +
+
+                        velocity[1] *
+                        velocity[1]
+
+                        +
+
+                        velocity[2] *
+                        velocity[2]
+
+                    );
+
+                const dir = [
+
+                    velocity[0] / speed,
+                    velocity[1] / speed,
+                    velocity[2] / speed
+
+                ];
+
+                const tailXYZ = [
+
+                    position[0] -
+                    dir[0] *
+                    tracerLength,
+
+                    position[1] -
+                    dir[1] *
+                    tracerLength,
+
+                    position[2] -
+                    dir[2] *
+                    tracerLength
+
+                ];
+
+                const tailOffset =
+                    geofs.api.xyz2lla(
+                        tailXYZ,
+                        origin
+                    );
+
+                const tailLocation = [
+
+                    origin[0] +
+                    tailOffset[0],
+
+                    origin[1] +
+                    tailOffset[1],
+
+                    origin[2] +
+                    tailOffset[2]
+
+                ];
+
+                tracerLine.polyline.positions =
+                    Cesium.Cartesian3.fromDegreesArrayHeights([
+
+                        tailLocation[1],
+                        tailLocation[0],
+                        tailLocation[2],
+
+                        currentLocation[1],
+                        currentLocation[0],
+                        currentLocation[2]
+
+                    ]);
+
+                ////////////////////////////////////////////////////
+                // IMPACT
+                ////////////////////////////////////////////////////
+
+                const ground =
+                    geofs.groundElevation || 0;
+
+                if (
+                    currentLocation[2]
+                    <= ground + IMPACT_RADIUS
+                ) {
+
+                    createImpact(
+                        currentLocation
+                    );
+
+                    cleanup();
+                    return;
+                }
+
+                ////////////////////////////////////////////////////
+                // TIMEOUT
+                ////////////////////////////////////////////////////
+
+                if (
+                    now - startTime >
+                    PROJECTILE_LIFE
+                ) {
+
+                    cleanup();
+                }
+
+            }, 16);
+
+        function cleanup() {
+
+            clearInterval(update);
+
+            try {
+                projectile.destroy();
+            } catch (e) {}
+
+            try {
+                geofs.api.viewer.entities.remove(
+                    tracerLine
+                );
+            } catch (e) {}
+        }
+    }
+
+    ////////////////////////////////////////////////////
+    // INPUT
+    ////////////////////////////////////////////////////
+
+    document.addEventListener(
+        "keydown",
+        e => {
+
+            if (e.code !== "Slash") {
+                return;
+            }
+
+            if (fireLoop) {
+                return;
+            }
+
+            fireGun(-GUN_SIDE_OFFSET);
+            fireGun(GUN_SIDE_OFFSET);
+
+            fireLoop =
+                setInterval(() => {
+
+                    fireGun(
+                        -GUN_SIDE_OFFSET
+                    );
+
+                    fireGun(
+                        GUN_SIDE_OFFSET
+                    );
+
+                }, FIRE_RATE);
+
+        },
+        true
+    );
+
+    document.addEventListener(
+        "keyup",
+        e => {
+
+            if (e.code !== "Slash") {
+                return;
+            }
+
+            clearInterval(fireLoop);
+            fireLoop = null;
+
+        },
+        true
+    );
+
+})();
