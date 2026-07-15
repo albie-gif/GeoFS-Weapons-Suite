@@ -1,0 +1,510 @@
+// ==UserScript==
+// @name         GeoFS Bombs v5
+// @namespace    GeoFS
+// @version      5.0
+// @match        https://*.geo-fs.com/geofs.php*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    const GRAVITY = 9.81;
+
+    //
+    // BOMB INVENTORY
+    //
+    let bombCount = 12;
+    let commaHeldSince = null;
+
+    //
+    // ACTIVE BOMBS
+    //
+    const activeBombs = [];
+
+    //
+    // BOMB DISPLAY
+    //
+    const bombDisplay =
+        document.createElement("div");
+
+    bombDisplay.style.position = "fixed";
+    bombDisplay.style.left = "1290px";
+    bombDisplay.style.top = "42%";
+    bombDisplay.style.zIndex = "100000";
+    bombDisplay.style.color = "lime";
+    bombDisplay.style.fontFamily = "monospace";
+    bombDisplay.style.fontSize = "18px";
+    bombDisplay.style.textShadow = "0 0 5px lime";
+    bombDisplay.style.pointerEvents = "none";
+    bombDisplay.style.whiteSpace = "pre";
+
+    document.body.appendChild(bombDisplay);
+
+    function updateBombDisplay() {
+
+        let lowestAGL = null;
+
+        for (const bomb of activeBombs) {
+
+            if (
+                lowestAGL === null ||
+                bomb.agl < lowestAGL
+            ) {
+
+                lowestAGL = bomb.agl;
+            }
+        }
+
+        const aglText =
+            lowestAGL === null
+                ? "----"
+                : Math.max(
+                    0,
+                    Math.round(lowestAGL)
+                  );
+
+        if (bombCount > 0) {
+
+            bombDisplay.textContent =
+`BMB ${bombCount}
+AGL ${aglText}`;
+
+        } else {
+
+            bombDisplay.textContent =
+`BMB EMPTY
+AGL ${aglText}`;
+        }
+    }
+
+    updateBombDisplay();
+
+    //
+    // SCORCH MARKS
+    //
+    const scorchMarks = [];
+    const MAX_SCORCH_MARKS = 100;
+
+    function createScorchMark(location) {
+
+        const scorch =
+            new geofs.api.billboard(
+                location,
+                "images/lights/yellowflare.png",
+                {
+                    scale: 18,
+                    opacity: 1
+                }
+            );
+
+        scorch._billboard.color =
+            new Cesium.Color(
+                0.02,
+                0.02,
+                0.02,
+                0.95
+            );
+
+        scorchMarks.push(scorch);
+
+        if (
+            scorchMarks.length >
+            MAX_SCORCH_MARKS
+        ) {
+
+            try {
+                scorchMarks[0].destroy();
+            } catch (e) {}
+
+            scorchMarks.shift();
+        }
+    }
+
+    //
+    // EXPLOSION
+    //
+    function createExplosion(location) {
+
+        const flash =
+            new geofs.api.billboard(
+                location,
+                "images/lights/yellowflare.png",
+                {
+                    scale: 35,
+                    opacity: 1
+                }
+            );
+
+        setTimeout(function () {
+
+            try {
+                flash.destroy();
+            } catch (e) {}
+
+        }, 80);
+
+        flash._billboard.color =
+            new Cesium.Color(
+                1,
+                1,
+                0.8,
+                1
+            );
+
+        const fireball =
+            new geofs.api.billboard(
+                location,
+                "images/lights/yellowflare.png",
+                {
+                    scale: 20,
+                    opacity: 1
+                }
+            );
+
+        fireball._billboard.color =
+            new Cesium.Color(
+                1,
+                0.4,
+                0,
+                1
+            );
+
+        createScorchMark(location);
+
+        let smokeEmitter = null;
+
+        try {
+
+            smokeEmitter =
+                new geofs.fx.ParticleEmitter({
+
+                    off: 0,
+                    location: location,
+
+                    duration: 8000,
+                    rate: 0.004,
+
+                    life: 15000,
+
+                    easing: "easeOutQuart",
+
+                    startScale: 0.3,
+                    endScale: 6,
+
+                    randomizeStartScale: 0.1,
+                    randomizeEndScale: 1,
+
+                    startOpacity: 0.8,
+                    endOpacity: 0,
+
+                    startRotation: "random",
+
+                    texture: "darkSmoke"
+                });
+
+        } catch (e) {}
+
+        setTimeout(function () {
+
+            try { fireball.destroy(); } catch (e) {}
+            try { smokeEmitter.destroy(); } catch (e) {}
+
+        }, 10000);
+    }
+
+    //
+    // DROP BOMB
+    //
+    function dropBomb() {
+
+        if (bombCount <= 0) {
+            return;
+        }
+
+        bombCount--;
+        updateBombDisplay();
+
+        const aircraft =
+            geofs.aircraft.instance;
+
+        if (!aircraft) {
+            return;
+        }
+
+        const origin =
+            [...aircraft.llaLocation];
+
+        //
+        // RELEASE FLASH
+        //
+        const releaseFlash =
+            new geofs.api.billboard(
+                origin,
+                "images/lights/yellowflare.png",
+                {
+                    scale: 15,
+                    opacity: 1
+                }
+            );
+
+        setTimeout(function () {
+
+            try {
+                releaseFlash.destroy();
+            } catch (e) {}
+
+        }, 150);
+
+        let position = [0, 0, 0];
+
+        const bomb =
+            new geofs.api.billboard(
+                origin,
+                "images/lights/yellowflare.png",
+                {
+                    scale: 2,
+                    opacity: 1
+                }
+            );
+
+        bomb._billboard.color =
+            new Cesium.Color(
+                0.7,
+                0.7,
+                0.7,
+                1
+            );
+
+        //
+        // Reduced forward momentum
+        //
+        let velocity = [
+
+            (aircraft.velocity?.[0] || 0) * 0.5,
+            (aircraft.velocity?.[1] || 0) * 0.5,
+            aircraft.velocity?.[2] || 0
+
+        ];
+
+        let lastTime =
+            Date.now();
+
+        let lastSmokeTime = 0;
+
+        const bombTrack = {
+            agl: 0
+        };
+
+        activeBombs.push(
+            bombTrack
+        );
+
+        updateBombDisplay();
+
+        const update =
+            setInterval(function () {
+
+                const now =
+                    Date.now();
+
+                const dt =
+                    (now - lastTime) /
+                    1000;
+
+                lastTime = now;
+
+                velocity[2] -=
+                    GRAVITY * dt;
+
+                //
+                // Drag
+                //
+                velocity[0] *= 0.995;
+                velocity[1] *= 0.995;
+
+                position[0] +=
+                    velocity[0] * dt;
+
+                position[1] +=
+                    velocity[1] * dt;
+
+                position[2] +=
+                    velocity[2] * dt;
+
+                const offset =
+                    geofs.api.xyz2lla(
+                        position,
+                        origin
+                    );
+
+                const location = [
+
+                    origin[0] +
+                        offset[0],
+
+                    origin[1] +
+                        offset[1],
+
+                    origin[2] +
+                        offset[2]
+
+                ];
+
+                bomb.setLocation(
+                    location
+                );
+
+                //
+                // AGL tracking
+                //
+                bombTrack.agl =
+                    location[2] -
+                    (geofs.groundElevation || 0);
+
+                updateBombDisplay();
+
+                //
+                // BOMB TRAIL
+                //
+                if (
+                    now - lastSmokeTime > 75
+                ) {
+
+                    lastSmokeTime = now;
+
+                    try {
+
+                        const trail =
+                            new geofs.fx.ParticleEmitter({
+
+                                off: 0,
+                                location: location,
+
+                                duration: 250,
+                                rate: 0.01,
+
+                                life: 4000,
+
+                                easing: "easeOutQuart",
+
+                                startScale: 0.02,
+                                endScale: 0.15,
+
+                                startOpacity: 0.8,
+                                endOpacity: 0,
+
+                                startRotation: "random",
+
+                                texture: "whitesmoke"
+
+                            });
+
+                        setTimeout(function () {
+
+                            try {
+                                trail.destroy();
+                            } catch (e) {}
+
+                        }, 4000);
+
+                    } catch (e) {}
+                }
+
+                //
+                // IMPACT
+                //
+                if (
+                    location[2] <=
+                    (geofs.groundElevation || 0) + 10
+                ) {
+
+                    const index =
+                        activeBombs.indexOf(
+                            bombTrack
+                        );
+
+                    if (index >= 0) {
+
+                        activeBombs.splice(
+                            index,
+                            1
+                        );
+                    }
+
+                    updateBombDisplay();
+
+                    createExplosion(
+                        location
+                    );
+
+                    clearInterval(
+                        update
+                    );
+
+                    try {
+                        bomb.destroy();
+                    } catch (e) {}
+
+                    return;
+                }
+
+            }, 20);
+    }
+
+    //
+    // KEY DOWN
+    //
+    document.addEventListener(
+        "keydown",
+        function (e) {
+
+            if (e.code !== "Comma") {
+                return;
+            }
+
+            if (commaHeldSince === null) {
+
+                commaHeldSince =
+                    Date.now();
+
+                dropBomb();
+            }
+
+        },
+        true
+    );
+
+    //
+    // KEY UP
+    //
+    document.addEventListener(
+        "keyup",
+        function (e) {
+
+            if (
+                e.code !== "Comma"
+            ) {
+                return;
+            }
+
+            const holdTime =
+                Date.now() -
+                commaHeldSince;
+
+            if (
+                holdTime >= 3000
+            ) {
+
+                bombCount = 12;
+
+                updateBombDisplay();
+            }
+
+            commaHeldSince = null;
+
+        },
+        true
+    );
+
+})();
