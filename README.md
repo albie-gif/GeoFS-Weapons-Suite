@@ -12,12 +12,12 @@ Made with extensive use of AI (Microsoft Copilot).
 # Bombs v5
 A bomb counter will appear on the left side of the screen, reading 'BMB 12 AGL ---'. Press comma "," to release a bomb. The bomb counter will count down to 0 then show EMPTY. The AGL counter will show the distance between the bomb and the ground. When the counter shows EMPTY, press and hold comma "," for five long seconds and the bomb count will reset to 12.
 When a bomb is released, there is a flash to indicate its release, then a thick smoke trail will follow the bomb. Upon impact, an explosion in orange and black is shown, then smoke is released lasting 20 seconds. A black scorch mark will remain in place. The scorch marks last until game reset or until the number of bomb scorch marks exceeds 100.
-- Known bugs: none.
+- Known bugs: steeper hills are not necessarily recognised as ground, and bombs may explode below them. 
 
 # Guns v8
 Press slash '/' to fire. Bullet visuals should appear from either wing. The observant will note that at low altitudes small black scorches are briefly visible at impact sites when the ground is fired upon (can only be seen at low altitude).
 - Known bugs: guns are not well aligned to aircraft; guns will not fire if aircraft is rolled more than around 60 degrees; bullet visibility is poor; tracers are semi-static
 
-# Target Tracker v3
-Description...
-- Known bugs: TGT -> tracker is not reliable when the aircraft is more than 90 degrees from your field of view;                                    
+# Target Tracker v8
+A button will appear on the left middle of the screen reading "MA OFF", and in the top right a panel also reading MA OFF. If the button is clicked, the panel will show a green bar and read "NO TARGET" until there is an aircraft in view. If aircraft are visible on the screen, one (usually the nearest) will be marked with a green diamond and bar, and the panel will show "TRACKING" and the plane's name, coordinates, range and number within the available targets. After 3 seconds, the bar and diamond will change to red (the bar incrementally) and the panel will show "TARGET LOCKED". At this point, if the missile system is enabled, a missile fired will track this aircraft. Click "Y" and "SHIFT + Y" to cycle through available target aircraft. If the aircraft goes out of view, the lock will be lost and an arrow and "TGT" will appear indicating the direction. 
+- Known bugs: TGT -> tracker is not reliable when the aircraft is more than 90 degrees from your field of view                                    
