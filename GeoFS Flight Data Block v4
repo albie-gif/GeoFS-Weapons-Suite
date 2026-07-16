@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         GeoFS Flight Data Block v4
+// @name         GeoFS Flight Data Block v5
 // @namespace    GeoFS
 // @version      3.0
 // @match        https://*.geo-fs.com/geofs.php*
@@ -185,10 +185,10 @@
             previousTime = now;
 
             dataBlock.textContent =
-`SPD ${Math.round(speed)*2}
-ALT ${Math.round(altitude)}
-AGL ${Math.round(agl)}
-V/S ${vs}
+`SPD ${Math.round(speed)*1.94}
+ALT ${Math.round(altitude)*3.28}
+AGL ${Math.round(agl)*3.28}
+V/S ${vs*3.28}
 G   ${displayedG.toFixed(1)}`;
 
         } catch (e) {
