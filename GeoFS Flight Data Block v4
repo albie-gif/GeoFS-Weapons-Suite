@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         GeoFS Flight Data Block v5
+// @name         GeoFS Flight Data Block v5.2
 // @namespace    GeoFS
 // @version      3.0
 // @match        https://*.geo-fs.com/geofs.php*
