@@ -10,7 +10,59 @@
     'use strict';
 
     const GRAVITY = 9.81;
+//
+// SOUNDS
+//
 
+const explosionSound = new Audio("https://cdn.jsdelivr.net/gh/albie-gif/GeoFS-Weapons-Suite@main/bbc_heavy-expl_07037325.mp3");
+
+// Optional volume settings
+
+explosionSound.volume = 0.8;
+function playExplosionSound(location) {
+
+    try {
+
+        const aircraft =
+            geofs.aircraft.instance;
+
+        const boom =
+            explosionSound.cloneNode();
+
+        let volume = 1.0;
+
+        if (aircraft && aircraft.llaLocation) {
+
+            const dx =
+                aircraft.llaLocation[0] -
+                location[0];
+
+            const dy =
+                aircraft.llaLocation[1] -
+                location[1];
+
+            const dz =
+                aircraft.llaLocation[2] -
+                location[2];
+
+            const distance =
+                Math.sqrt(
+                    dx * dx +
+                    dy * dy +
+                    dz * dz
+                );
+volume =
+    Math.max(
+        0.05,
+        1 - distance / 5000
+    );
+        }
+
+        boom.volume = volume;
+        boom.play();
+
+    } catch (e) {}
+}
     //
     // BOMB INVENTORY
     //
@@ -124,11 +176,12 @@ AGL ${aglText}`;
     //
     // EXPLOSION
     //
-    function createExplosion(location) {
 
-        const flash =
-            new geofs.api.billboard(
-                location,
+function createExplosion(location) {
+playExplosionSound(location);
+    const flash =
+        new geofs.api.billboard(
+            location,
                 "images/lights/yellowflare.png",
                 {
                     scale: 35,
