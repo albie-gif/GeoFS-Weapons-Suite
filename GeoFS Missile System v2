@@ -8,6 +8,60 @@
 
 (function () {
     'use strict';
+//
+// SOUNDS
+//
+
+const explosionSound = new Audio(
+    "https://cdn.jsdelivr.net/gh/albie-gif/GeoFS-Weapons-Suite@main/bbc_heavy-expl_07037325.mp3"
+);
+
+explosionSound.volume = 0.8;
+
+function playExplosionSound(location) {
+
+    try {
+
+        const aircraft =
+            geofs.aircraft.instance;
+
+        const boom =
+            explosionSound.cloneNode();
+
+        let volume = 1.0;
+
+        if (aircraft && aircraft.llaLocation) {
+
+            const latDiff =
+                (aircraft.llaLocation[0] - location[0]) *
+                111000;
+
+            const lonDiff =
+                (aircraft.llaLocation[1] - location[1]) *
+                111000;
+
+            const altDiff =
+                aircraft.llaLocation[2] - location[2];
+
+            const distance =
+                Math.sqrt(
+                    latDiff * latDiff +
+                    lonDiff * lonDiff +
+                    altDiff * altDiff
+                );
+
+            volume =
+                Math.max(
+                    0.05,
+                    1 - distance / 5000
+                );
+        }
+
+        boom.volume = volume;
+        boom.play();
+
+    } catch (e) {}
+}
 
     let activeMissiles = [];
     const MAX_MISSILES = 18;
@@ -195,6 +249,11 @@ function createScorchMark(location) {
     //--------------------------------------------------
 
     function createExplosion(location) {
+
+
+    playExplosionSound(location);
+
+
 let smokeEmitter = null;
 
 try {
