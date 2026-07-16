@@ -1,5 +1,5 @@
 # GeoFS-Weapons-Suite
-Separate userscripts, still in development, which create visual weapons systems for GeoFS flight simulator. Non-multiplayer, this suite includes tracking missiles, guns and bombs, as well as the HUD found in my HUD repository. 
+Separate userscripts, still in development, which create visual weapons systems for GeoFS flight simulator. Non-multiplayer, this suite includes tracking missiles, guns, bombs, targeting system, a HUD and flight data. Created July 2026 (my GeoFS callsign is usually Universal112).
 
 ### Instructions for use:
 Each of these scripts should be used as a separate Tampermonkey userscript. Load in GeoFS and fly. The missile system is dependent on the target tracker, and all will be much better if the HUD is used too (as it replaces the ad banner with a black background for HUD informatics). I strongly recommend using this utilities addon too (https://github.com/tylerbmusic/geofs-utilities) to get flares and smoke trails (as well as many other useful little addons). 
