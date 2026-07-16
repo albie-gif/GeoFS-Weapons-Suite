@@ -188,7 +188,7 @@
 `SPD ${Math.round(speed)*1.94}
 ALT ${Math.round(altitude)*3.28}
 AGL ${Math.round(agl)*3.28}
-V/S ${vs*3.28}
+V/S ${vs*1.94}
 G   ${displayedG.toFixed(1)}`;
 
         } catch (e) {
