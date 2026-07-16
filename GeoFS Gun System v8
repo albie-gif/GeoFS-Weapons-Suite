@@ -8,7 +8,17 @@
 
 (function () {
     'use strict';
+//
+// GUN SOUND
+//
 
+const gunSound = new Audio(
+    "https://cdn.jsdelivr.net/gh/albie-gif/GeoFS-Weapons-Suite@main/Video%20Project%208%20(1).m4a"
+);
+
+gunSound.volume = 0.5;
+
+let triggerDownTime = null;
     ////////////////////////////////////////////////////
     // CONFIG
     ////////////////////////////////////////////////////
@@ -510,12 +520,20 @@ let position = [
                 return;
             }
 
-            if (fireLoop) {
-                return;
-            }
+if (fireLoop) {
+    return;
+}
 
-            fireGun(-GUN_SIDE_OFFSET);
-            fireGun(GUN_SIDE_OFFSET);
+triggerDownTime = Date.now();
+
+gunSound.currentTime = 0;
+
+try {
+    gunSound.play();
+} catch (e) {}
+
+fireGun(-GUN_SIDE_OFFSET);
+fireGun(GUN_SIDE_OFFSET);
 
             fireLoop =
                 setInterval(() => {
@@ -542,9 +560,30 @@ let position = [
                 return;
             }
 
-            clearInterval(fireLoop);
-            fireLoop = null;
+clearInterval(fireLoop);
+fireLoop = null;
+if (triggerDownTime === null) {
+    return;
+}
+const heldTime =
+    Date.now() - triggerDownTime;
 
+const minimumDuration = 100;
+
+if (heldTime < minimumDuration) {
+
+    setTimeout(() => {
+
+        gunSound.pause();
+        gunSound.currentTime = 0;
+
+    }, minimumDuration - heldTime);
+
+} else {
+
+    gunSound.pause();
+    gunSound.currentTime = 0;
+}
         },
         true
     );
