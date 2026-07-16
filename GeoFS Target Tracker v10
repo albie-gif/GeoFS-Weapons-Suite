@@ -15,7 +15,108 @@ let lockedTarget = null;
 let masterArm = false;
 let lockStartTime = null;
 let hardLocked = false;
+//
+// AUDIO
+//
 
+let audioCtx = null;
+
+let acquisitionPlayed = false;
+let lockPlayed = false;
+
+function ensureAudio() {
+
+    if (!audioCtx) {
+
+        audioCtx =
+            new (
+                window.AudioContext ||
+                window.webkitAudioContext
+            )();
+    }
+
+    return audioCtx;
+}
+
+function playBeep(
+    frequency,
+    duration,
+    volume
+) {
+
+    try {
+
+        const ctx =
+            ensureAudio();
+
+        const osc =
+            ctx.createOscillator();
+
+        const gain =
+            ctx.createGain();
+
+        osc.type = "sine";
+
+        osc.frequency.value =
+            frequency;
+
+        gain.gain.value =
+            volume;
+
+        osc.connect(gain);
+
+        gain.connect(
+            ctx.destination
+        );
+
+        osc.start();
+
+        setTimeout(() => {
+
+            try {
+                osc.stop();
+            } catch (e) {}
+
+        }, duration);
+
+    } catch (e) {}
+}
+    function playAcquisitionTone() {
+
+    playBeep(
+        1975.53, // B6
+        100,
+        0.03
+    );
+}
+    function playLockTone() {
+
+    playBeep(
+        1975.53,
+        80,
+        0.03
+    );
+
+    setTimeout(() => {
+
+        playBeep(
+            1975.53,
+            80,
+            0.03
+        );
+
+    }, 120);
+
+    setTimeout(() => {
+
+        playBeep(
+            1975.53,
+            80,
+            0.03
+        );
+
+    }, 240);
+}
 const TARGET_RANGE = 40; // selectable
 const LOCK_RANGE = 15;   // lockable
 const LOCK_FOV = 20;     // degrees
@@ -171,6 +272,9 @@ lockedTarget = null;
 hardLocked = false;
 
 lockStartTime = null;
+
+            acquisitionPlayed = false;
+lockPlayed = false;
             masterArmButton.textContent =
                 "MA OFF";
 
@@ -289,17 +393,17 @@ document.addEventListener("keydown", function (e) {
 
     lockedTarget =
         targetList[selectedTargetIndex];
+//--------------------------------------------------
+// FORCE RELOCK
+//--------------------------------------------------
 
-    //--------------------------------------------------
-    // FORCE RELOCK
-    //--------------------------------------------------
+lockStartTime = null;
+hardLocked = false;
 
-    lockStartTime = null;
-    hardLocked = false;
+acquisitionPlayed = false;
+lockPlayed = false;
 
-    window.geofsCombatTarget = null;
-
-    console.log(
+window.geofsCombatTarget = null;    console.log(
         "[TARGET]",
         getTargetName(lockedTarget)
     );
@@ -563,6 +667,13 @@ if (
 
     lockedTarget =
         targetList[0];
+
+    if (!acquisitionPlayed) {
+
+        playAcquisitionTone();
+
+        acquisitionPlayed = true;
+    }
 }
 
             //--------------------------------------------------
@@ -660,10 +771,16 @@ if (
         Date.now() - lockStartTime >=
         LOCK_TIME
     ) {
+if (!hardLocked) {
 
-        hardLocked = true;
+    playLockTone();
 
- if (masterArm) {
+    lockPlayed = true;
+}
+
+hardLocked = true;
+
+if (masterArm) {
 
     window.geofsCombatTarget =
         target;
@@ -672,9 +789,11 @@ if (
 
 } else {
 
-    lockStartTime = null;
-    hardLocked = false;
-    lockPercent = 0;
+lockStartTime = null;
+hardLocked = false;
+lockPercent = 0;
+
+lockPlayed = false;
 }
 lockBar.innerHTML = "";
 
